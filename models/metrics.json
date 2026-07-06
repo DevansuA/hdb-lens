@@ -8,15 +8,15 @@
       "r2": 0.016727384508589793
     },
     "lightgbm_point": {
-      "mae": 33570.41771619694,
-      "mape_pct": 4.882121183634196,
-      "rmse": 48890.358827314914,
-      "r2": 0.9426247802413462
+      "mae": 33929.00331590624,
+      "mape_pct": 4.922674193308748,
+      "rmse": 49662.3122354355,
+      "r2": 0.9407986262332413
     },
     "interval_p10_p90": {
-      "empirical_coverage_pct": 65.11062387881204,
-      "mean_width_sgd": 75909.78567880673,
-      "median_width_pct_of_price": 10.430118064268678
+      "empirical_coverage_pct": 67.77356986246761,
+      "mean_width_sgd": 83863.4001636506,
+      "median_width_pct_of_price": 11.384762120419879
     }
   },
   "test_2026": {
@@ -28,32 +28,21 @@
       "r2": 0.015495250635227609
     },
     "lightgbm_point": {
-      "mae": 39680.37259350804,
-      "mape_pct": 5.663074928607124,
-      "rmse": 58510.67661784227,
-      "r2": 0.9252069765564692
+      "mae": 39941.52465287556,
+      "mape_pct": 5.694208774263673,
+      "rmse": 58728.483993645044,
+      "r2": 0.9246491025429826
     },
     "interval_p10_p90": {
-      "empirical_coverage_pct": 56.874256247520826,
-      "mean_width_sgd": 75541.97483348107,
-      "median_width_pct_of_price": 10.306767873279695
-    },
-    "interval_p10_p90_raw": {
-      "empirical_coverage_pct": 56.874256247520826,
-      "mean_width_sgd": 75541.97483348107,
-      "median_width_pct_of_price": 10.306767873279695
+      "empirical_coverage_pct": 60.89646965489885,
+      "mean_width_sgd": 83313.64164449976,
+      "median_width_pct_of_price": 11.190441300613019
     },
     "interval_p10_p90_conformal": {
-      "empirical_coverage_pct": 71.93177310591035,
-      "mean_width_sgd": 102026.73058130096,
-      "median_width_pct_of_price": 14.353535882174906
-    },
-    "interval_p10_p90_conformal_recent": {
-      "empirical_coverage_pct": 74.32764775882586,
-      "mean_width_sgd": 107372.19148480218,
-      "median_width_pct_of_price": 15.169839126895933
+      "empirical_coverage_pct": 75.65251884172947,
+      "mean_width_sgd": 111396.19030897072,
+      "median_width_pct_of_price": 15.491129824301622
     }
   },
-  "cqr_q_hat_log_space": 0.02049091381028218,
-  "cqr_q_hat_recent_window": 0.02462288987221466
+  "cqr_q_hat": 0.021819894974772193
 }
