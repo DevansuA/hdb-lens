@@ -9,10 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
-from hdblens.config import CATEGORICAL_FEATURES, TOWN_COORDS
+from hdblens.config import CATEGORICAL_FEATURES, MODEL_DIR, TOWN_COORDS
 from hdblens.predict import make_feature_row, predict_price
 from hdblens.train import load_bundle
 
@@ -36,10 +37,11 @@ def _load():
             [booster.booster_.pandas_categorical[i] for i in range(len(CATEGORICAL_FEATURES))],
         )
     }
-    return bundle, cats
+    q_hat = float(np.load(MODEL_DIR / "q_hat.npy"))
+    return bundle, cats, q_hat
 
 
-bundle, ref_cats = _load()
+bundle, ref_cats, q_hat = _load()
 
 col1, col2 = st.columns(2)
 with col1:
@@ -67,7 +69,7 @@ if st.button("Estimate price", type="primary"):
         month_index=meta_month_index,
         reference_categories=ref_cats,
     )
-    est = predict_price(bundle, row)
+    est = predict_price(bundle, row, q_hat=q_hat)
     st.metric("Estimated price (P50)", f"S${est['p50']:,.0f}")
     st.write(
         f"**Likely range (P10–P90):** S${est['p10']:,.0f} - S${est['p90']:,.0f}"
