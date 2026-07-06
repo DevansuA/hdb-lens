@@ -1,0 +1,18 @@
+{
+  "trained_through": "2024-12",
+  "validated_on": "2025-01..2025-12",
+  "tested_on": "2026-01..2026-07",
+  "n_train": 196982,
+  "features": [
+    "town",
+    "flat_type",
+    "flat_model",
+    "floor_area_sqm",
+    "storey_mid",
+    "remaining_lease_months",
+    "flat_age_years",
+    "dist_cbd_km",
+    "dist_regional_centre_km",
+    "month_index"
+  ]
+}
