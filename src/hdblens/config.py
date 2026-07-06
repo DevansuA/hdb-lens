@@ -51,7 +51,7 @@ TOWN_COORDS: dict[str, tuple[float, float]] = {
     "YISHUN": (1.4304, 103.8354),
 }
 
-# Raffles Place — proxy for the CBD
+# Raffles Place, proxy for the CBD
 CBD = (1.2840, 103.8515)
 
 # URA-designated regional centres (decentralised employment hubs)

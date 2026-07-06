@@ -2,7 +2,7 @@
 
 Downloads the full HDB resale transactions dataset (Jan-2017 onwards)
 via the official initiate-download / poll-download API, so the project
-always reflects the latest monthly release — no stale bundled CSVs.
+always reflects the latest monthly release, with no stale bundled CSVs.
 """
 
 from __future__ import annotations

@@ -1,11 +1,11 @@
 """Model training.
 
 Three-tier modelling strategy:
-1. Naive baseline  — median price per (town, flat_type). Every serious project
+1. Naive baseline  : median price per (town, flat_type). Every serious project
    needs a baseline; beating "a lookup table" is the bar that matters.
-2. Point model     — LightGBM regression on log-price (L1 objective, robust
+2. Point model     : LightGBM regression on log-price (L1 objective, robust
    to the heavy right tail of the price distribution).
-3. Quantile models — LightGBM pinball-loss models at P10 / P50 / P90, giving
+3. Quantile models : LightGBM pinball-loss models at P10 / P50 / P90, giving
    calibrated price *ranges* instead of a single number. A buyer cares far
    more about "likely between $612k and $694k" than "$651k".
 """

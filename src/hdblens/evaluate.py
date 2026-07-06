@@ -46,7 +46,7 @@ def evaluate_split(bundle: dict, df: pd.DataFrame) -> dict:
 
 
 def error_by_group(bundle: dict, df: pd.DataFrame, group: str) -> pd.DataFrame:
-    """Slice MAPE by a grouping column (e.g. town) to expose weak segments —
+    """Slice MAPE by a grouping column (e.g. town) to expose weak segments:
     aggregate metrics hide where a model quietly fails."""
     out = df[[group, TARGET]].copy()
     out["pred"] = np.exp(bundle["point"].predict(df[FEATURES]))

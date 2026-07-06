@@ -1,4 +1,4 @@
-"""HDB-Lens — interactive resale price estimator.
+"""HDB-Lens: interactive resale price estimator.
 
 Run:  streamlit run app/streamlit_app.py
 Requires a trained bundle (python scripts/run_pipeline.py).
@@ -70,7 +70,7 @@ if st.button("Estimate price", type="primary"):
     est = predict_price(bundle, row)
     st.metric("Estimated price (P50)", f"S${est['p50']:,.0f}")
     st.write(
-        f"**Likely range (P10–P90):** S${est['p10']:,.0f} — S${est['p90']:,.0f}"
+        f"**Likely range (P10–P90):** S${est['p10']:,.0f} - S${est['p90']:,.0f}"
     )
     st.progress(min(est["p50"] / 1_500_000, 1.0))
     st.caption(

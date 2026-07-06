@@ -6,7 +6,7 @@ extrapolate spread. CQR (Romano, Patterson & Candès, 2019) fixes this with a
 distribution-free guarantee: compute conformity scores on a held-out
 calibration window, then widen the interval by the appropriate empirical
 quantile of those scores. Coverage on exchangeable data is then guaranteed
-at the nominal level — and in practice transfers well even under mild drift.
+at the nominal level, and in practice transfers well even under mild drift.
 """
 
 from __future__ import annotations

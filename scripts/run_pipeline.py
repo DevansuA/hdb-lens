@@ -82,7 +82,7 @@ def main(refresh: bool) -> None:
     logger.info("Feature matrix: %s rows, span %s .. %s", len(df), df["month"].min(), df["month"].max())
 
     train, val, test = temporal_split(df, TRAIN_END, VAL_END)
-    logger.info("Split sizes — train %d | val %d | test %d", len(train), len(val), len(test))
+    logger.info("Split sizes: train %d | val %d | test %d", len(train), len(val), len(test))
 
     bundle = train_all(train, val)
 

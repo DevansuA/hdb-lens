@@ -78,7 +78,7 @@ def add_geo_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_features(raw: pd.DataFrame) -> pd.DataFrame:
     """Full raw -> model-ready transformation. Pure function of one row's data
-    plus static geography — safe against temporal leakage by construction."""
+    plus static geography, safe against temporal leakage by construction."""
     df = raw.copy()
 
     df["month"] = pd.PeriodIndex(df["month"], freq="M")
@@ -107,7 +107,7 @@ def build_features(raw: pd.DataFrame) -> pd.DataFrame:
 def temporal_split(
     df: pd.DataFrame, train_end: str, val_end: str
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Chronological train/val/test split — the only honest way to evaluate
+    """Chronological train/val/test split, the only honest way to evaluate
     a model that will be used to price *future* transactions."""
     train_cut = pd.Period(train_end, freq="M")
     val_cut = pd.Period(val_end, freq="M")
