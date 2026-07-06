@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check src tests
+      - name: Test
+        run: pytest -q
+
+  monthly-retrain-check:
+    # Verifies the live data.gov.sg pipeline still works (schema drift guard)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e .
+      - name: Smoke-test ingestion + features
+        run: |
+          python - <<'EOF'
+          import pandas as pd
+          from hdblens.ingest import download_resale_data
+          from hdblens.features import build_features
+          path = download_resale_data(force=True)
+          df = build_features(pd.read_csv(path))
+          assert len(df) > 200_000, "Dataset unexpectedly small"
+          assert df["resale_price"].between(50_000, 3_000_000).mean() > 0.999
+          print(f"OK: {len(df):,} rows through {df['month'].max()}")
+          EOF
