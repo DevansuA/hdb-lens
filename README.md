@@ -10,16 +10,19 @@ Most price predictors answer *"what will this flat sell for?"* with a single num
 
 | | Naive baseline¹ | **HDB-Lens (LightGBM)** |
 |---|---|---|
-| MAE (2026 test, n=12,605) | S$173,880 | **S$39,680** |
+| MAE (2026 test, n=12,605) | S$173,880 | **S$39,942** |
 | MAPE | 24.5% | **5.7%** |
-| R² | 0.02 | **0.93** |
+| R² | 0.02 | **0.92** |
 
 ¹ median price per (town, flat type); every model must beat a lookup table before it deserves attention.
 
-**Uncertainty that means something:** raw P10–P90 quantile models covered only **57%** of future prices (classic distribution shift, 2026's market moved). Applying **Conformalized Quantile Regression** calibrated on the most recent window lifted empirical coverage to **74%** at a median interval width of ~15% of price. The residual gap vs. the nominal 80% is a measurable signature of 2026 price drift, quantified, plotted, and discussed below rather than hidden.
+**Uncertainty that means something:** raw P10–P90 quantile models covered only **61%** of future prices (classic distribution shift, 2026's market moved). Applying **Conformalized Quantile Regression** frozen at deployment lifted empirical coverage to **76%**; recalibrating monthly against the trailing 6 months of observed sales (adaptive CQR) closes the gap further to **78%** of the nominal 80%, at a median interval width of ~17% of price. The Streamlit app serves the frozen-CQR interval (what a real deployment would ship); the adaptive result quantifies how much of the remaining gap is recoverable with an online update loop.
 
 <p align="center">
   <img src="reports/figures/prediction_intervals.png" width="640" alt="Conformal prediction intervals on unseen 2026 transactions"/>
+</p>
+<p align="center">
+  <img src="reports/figures/adaptive_coverage.png" width="640" alt="Monthly interval coverage: raw quantiles vs frozen CQR vs adaptive CQR"/>
 </p>
 
 ---
@@ -75,7 +78,7 @@ src/hdblens/          the package
   conformal.py        CQR interval calibration
   evaluate.py         time-forward metrics, per-town error slicing
   predict.py          single-flat inference API
-app/streamlit_app.py  interactive estimator with calibrated ranges
+app/streamlit_app.py  interactive estimator: map, per-prediction SHAP, calibrated ranges, market context
 scripts/run_pipeline.py  one-command end-to-end reproduction
 tests/                unit tests (parsers, geo, splits, baseline)
 reports/figures/      generated diagnostics
@@ -83,7 +86,7 @@ reports/figures/      generated diagnostics
 
 ## Honest limitations & roadmap
 
-- **Coverage gap under drift.** 74% vs nominal 80% on 2026: tree models cannot extrapolate the `month_index` trend, so upper quantiles undershoot in a rising market. Next step: adaptive conformal inference (online q̂ updates) or a linear trend prior on log-price.
+- **Coverage gap under drift.** Even adaptive CQR (`conformal.adaptive_qhat`, monthly recalibration on trailing observed sales) only closes 76% → 78% vs nominal 80% on 2026: tree models cannot extrapolate the `month_index` trend, so upper quantiles still undershoot in a rising market. Next step: a linear trend prior on log-price, or shorter recalibration windows.
 - **Town-centroid geography.** Distances use town centroids, not block-level geocoding. OneMap geocoding of the ~9,600 unique blocks (plus distance-to-nearest-MRT) is the highest-value feature upgrade.
 - **No macro covariates.** Interest rates and cooling measures (e.g., 2025 loan-to-value changes) enter only implicitly through `month_index`.
 - Per-town error slicing (`evaluate.error_by_group`) shows where the model is weakest (small-volume central towns), a candidate for hierarchical pooling.
