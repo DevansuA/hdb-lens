@@ -1,4 +1,4 @@
-"""HDB-Lens: interactive resale price estimator.
+"""HDB-Lens: what is your HDB flat worth?
 
 Run:  streamlit run app/streamlit_app.py
 Requires a trained bundle (python scripts/run_pipeline.py).
@@ -52,6 +52,71 @@ FEATURE_LABELS = {
     "month_index": "Market month (trend)",
 }
 
+HERO_CSS = """
+<style>
+.hero-card {
+    border: 1px solid #e1e0d9;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(11, 11, 11, 0.04), 0 8px 24px rgba(11, 11, 11, 0.05);
+    padding: 2.2rem 2.4rem 2rem;
+    margin: 0.4rem 0 0.6rem;
+}
+.hero-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #898781;
+    margin-bottom: 0.35rem;
+}
+.hero-price {
+    font-size: 3.6rem;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    color: #0b0b0b;
+}
+.hero-persqm {
+    font-size: 0.9rem;
+    color: #52514e;
+    margin-top: 0.3rem;
+}
+.hero-range-track {
+    position: relative;
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #dce9fa, #9ec5f4 50%, #dce9fa);
+    margin: 1.4rem 0 0.45rem;
+}
+.hero-range-marker {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #2a78d6;
+    border: 3px solid #ffffff;
+    box-shadow: 0 0 0 1px #2a78d6;
+}
+.hero-range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: #52514e;
+    margin-bottom: 1.1rem;
+}
+.hero-sentence {
+    font-size: 1.08rem;
+    line-height: 1.55;
+    color: #0b0b0b;
+    max-width: 46rem;
+    margin: 0;
+}
+</style>
+"""
+
 
 @st.cache_resource
 def _load():
@@ -81,6 +146,26 @@ def _load_artifacts():
 
 def _sgd(x: float) -> str:
     return f"S${x:,.0f}"
+
+
+def _sgd_k(x: float) -> str:
+    """Round to the nearest thousand — honest precision for a price estimate."""
+    return f"S${round(x, -3):,.0f}"
+
+
+def _floor_band(storey: int) -> str:
+    if storey <= 3:
+        return "low"
+    if storey <= 9:
+        return "mid"
+    return "high"
+
+
+def _flat_phrase(flat_type: str) -> str:
+    """'4 ROOM' -> 'A 4-room flat', 'EXECUTIVE' -> 'An executive flat'."""
+    label = flat_type.lower().replace(" ", "-")
+    article = "An" if label[0] in "aeiou" else "A"
+    return f"{article} {label} flat"
 
 
 def _style_axis(ax) -> None:
@@ -152,15 +237,15 @@ def nearest_regional_centre(lat: float, lon: float) -> tuple[str, float]:
 def interval_figure(raw: dict, cal: dict, cov_raw: float, cov_cal: float) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(6.4, 2.0))
     rows = [
-        (1, raw, BASELINE, f"Raw model quantiles\n{cov_raw:.0f}% actual coverage"),
-        (0, cal, BLUE, f"CQR-calibrated (served)\n{cov_cal:.0f}% actual coverage"),
+        (1, raw, BASELINE, f"Model's raw range\ncaught {cov_raw:.0f}% of real 2026 prices"),
+        (0, cal, BLUE, f"Calibrated range (what you see)\ncaught {cov_cal:.0f}%"),
     ]
     for y, est, color, _ in rows:
         ax.plot([est["p10"], est["p90"]], [y, y], color=color, lw=7, solid_capstyle="round")
         ax.text(est["p10"], y + 0.22, _sgd(est["p10"]), ha="center", fontsize=8, color=INK_2)
         ax.text(est["p90"], y + 0.22, _sgd(est["p90"]), ha="center", fontsize=8, color=INK_2)
     ax.plot([cal["p50"]], [0], "o", ms=7, color=INK, zorder=5)
-    ax.text(cal["p50"], -0.42, f"P50 {_sgd(cal['p50'])}", ha="center", fontsize=8, color=INK)
+    ax.text(cal["p50"], -0.42, f"midpoint {_sgd(cal['p50'])}", ha="center", fontsize=8, color=INK)
     ax.set_yticks([r[0] for r in rows], [r[3] for r in rows], fontsize=8.5, color=INK)
     ax.set_ylim(-0.8, 1.7)
     span = cal["p90"] - cal["p10"]
@@ -224,7 +309,7 @@ def trend_figure(trends: pd.DataFrame, town: str, flat_type: str, est: dict) -> 
     ax.errorbar([mx], [est["p50"] / 1e3],
                 yerr=[[(est["p50"] - est["p10"]) / 1e3], [(est["p90"] - est["p50"]) / 1e3]],
                 fmt="o", ms=6, color=INK, ecolor=BLUE_LIGHT, elinewidth=5, capsize=0,
-                label="This flat · model P50 and calibrated range")
+                label="This flat · estimate with 80% range")
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}k"))
     ax.set_ylabel("Price (S$ '000)", fontsize=8.5, color=INK_2)
     ax.grid(axis="y", color=GRID, lw=0.7)
@@ -240,116 +325,141 @@ test_metrics = metrics["test_2026"]
 cov_raw = test_metrics["interval_p10_p90"]["empirical_coverage_pct"]
 cov_cal = test_metrics["interval_p10_p90_conformal"]["empirical_coverage_pct"]
 cov_adaptive = test_metrics.get("interval_p10_p90_adaptive", {}).get("empirical_coverage_pct")
+n_sales = meta["n_train"] + metrics["val_2025"]["n"] + test_metrics["n"]
+n_sales_str = f"{round(n_sales, -4):,}+"
 
-with st.sidebar:
-    st.header("Model card")
-    st.markdown(
-        f"""
-- **Data** · {meta["n_train"]:,} resale transactions, live from data.gov.sg
-- **Trained through** · {meta["trained_through"]}
-- **Tested on** · {meta["tested_on"]} (never seen in training)
-"""
-    )
-    c1, c2 = st.columns(2)
-    c1.metric("2026 test MAPE", f"{test_metrics['lightgbm_point']['mape_pct']:.1f}%")
-    c2.metric("2026 test MAE", _sgd(test_metrics["lightgbm_point"]["mae"]))
-    st.markdown("**Interval coverage** (80% nominal)")
-    rows = [("Raw P10–P90 quantiles", cov_raw), ("+ CQR, frozen q̂ (served here)", cov_cal)]
-    if cov_adaptive:
-        rows.append(("+ monthly adaptive recalibration", cov_adaptive))
-    st.markdown("\n".join(f"- {label}: **{v:.0f}%**" for label, v in rows))
-    st.caption(
-        "Every number above is out-of-time: the model prices 2026 flats knowing "
-        "only 2017–2024. The gap to the nominal 80% is honest, measured price drift."
-    )
-    st.markdown("[Source & methodology on GitHub](https://github.com/DevansuA/hdb-lens)")
+st.markdown(HERO_CSS, unsafe_allow_html=True)
 
-st.title("🏠 HDB-Lens")
+st.title("🏠 What's your HDB flat worth?")
 st.caption(
-    "Calibrated resale price ranges for Singapore public housing, trained on 230k+ "
-    "real transactions from data.gov.sg — with the uncertainty made honest by "
-    "conformal calibration."
+    f"HDB-Lens gives you an instant, honest estimate — learned from {n_sales_str} real "
+    "resale transactions published by data.gov.sg."
 )
 
-left, right = st.columns([5, 7], gap="large")
-with left:
-    st.subheader("Your flat")
-    c1, c2 = st.columns(2)
+with st.container(border=True):
+    st.markdown("**Describe your flat**")
+    c1, c2, c3 = st.columns(3)
     with c1:
         town = st.selectbox("Town", sorted(TOWN_COORDS))
+        floor_area = st.slider("Floor area (sqm)", 30, 180, 93)
+    with c2:
         flat_type = st.selectbox(
             "Flat type", ["2 ROOM", "3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE"], index=2
         )
+        storey = st.slider("Storey", 1, 50, 8)
+    with c3:
         flat_model = st.selectbox(
             "Flat model", ref_cats["flat_model"].categories.tolist(), index=0
         )
-    with c2:
-        floor_area = st.slider("Floor area (sqm)", 30, 180, 93)
-        storey = st.slider("Storey", 1, 50, 8)
         lease_left = st.slider("Remaining lease (years)", 40, 99, 75)
 
-    latest_month = pd.Period(trends["month"].max(), freq="M")
-    month_index = (latest_month - pd.Period("2017-01", freq="M")).n
-    row = make_feature_row(
-        town=town,
-        flat_type=flat_type,
-        flat_model=flat_model,
-        floor_area_sqm=floor_area,
-        storey_mid=storey,
-        remaining_lease_years=lease_left,
-        month_index=month_index,
-        reference_categories=ref_cats,
-    )
-    est = predict_price(bundle, row, q_hat=q_hat)
-    est_raw = predict_price(bundle, row)
+latest_month = pd.Period(trends["month"].max(), freq="M")
+month_index = (latest_month - pd.Period("2017-01", freq="M")).n
+row = make_feature_row(
+    town=town,
+    flat_type=flat_type,
+    flat_model=flat_model,
+    floor_area_sqm=floor_area,
+    storey_mid=storey,
+    remaining_lease_years=lease_left,
+    month_index=month_index,
+    reference_categories=ref_cats,
+)
+est = predict_price(bundle, row, q_hat=q_hat)
+est_raw = predict_price(bundle, row)
+# Rare quantile crossing: the P50 model can land outside the P10/P90 pair for
+# sparse combinations. Clamp for display so ranges always contain the midpoint.
+for e in (est, est_raw):
+    e["p50"] = float(np.clip(e["p50"], e["p10"], e["p90"]))
 
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Estimate (P50)", _sgd(est["p50"]))
-    m2.metric("Calibrated range", f"{est['p10'] / 1e3:,.0f}k – {est['p90'] / 1e3:,.0f}k")
-    m3.metric("Per sqm", _sgd(est["p50"] / floor_area))
+marker_pct = 100 * (est["p50"] - est["p10"]) / (est["p90"] - est["p10"])
+sentence = (
+    f"{_flat_phrase(flat_type)} in {town.title()} on a {_floor_band(storey)} floor is worth "
+    f"about <b>{_sgd_k(est['p50'])}</b>. Based on {n_sales_str} real transactions, we're 80% "
+    f"confident it would sell between <b>{_sgd_k(est['p10'])}</b> and "
+    f"<b>{_sgd_k(est['p90'])}</b>."
+)
+st.markdown(
+    f"""<div class="hero-card">
+  <div class="hero-eyebrow">Estimated resale value</div>
+  <div class="hero-price">{_sgd_k(est["p50"])}</div>
+  <div class="hero-persqm">{_sgd(est["p50"] / floor_area)} per square metre</div>
+  <div class="hero-range-track"><div class="hero-range-marker" style="left:{marker_pct:.1f}%"></div></div>
+  <div class="hero-range-labels"><span>low · {_sgd_k(est["p10"])}</span><span>high · {_sgd_k(est["p90"])}</span></div>
+  <p class="hero-sentence">{sentence}</p>
+</div>""",
+    unsafe_allow_html=True,
+)
 
-with right:
-    st.pydeck_chart(town_map(town), height=430)
+map_col, market_col = st.columns(2, gap="medium")
+with map_col, st.container(border=True):
+    st.markdown("**Where it sits**")
+    st.pydeck_chart(town_map(town), height=340)
     rc_name, rc_km = nearest_regional_centre(*TOWN_COORDS[town])
     cbd_km = float(row["dist_cbd_km"].iloc[0])
     st.markdown(
         f"<span style='color:{BLUE}'>●</span> {town.title()} &nbsp; "
-        f"<span style='color:{ORANGE}'>●</span> CBD · {cbd_km:.1f} km &nbsp; "
+        f"<span style='color:{ORANGE}'>●</span> city centre · {cbd_km:.1f} km &nbsp; "
         f"<span style='color:{VIOLET}'>●</span> nearest regional centre "
-        f"({rc_name}) · {rc_km:.1f} km &nbsp; "
-        f"<span style='color:{MUTED}'>●</span> other towns — distances are model features",
+        f"({rc_name}) · {rc_km:.1f} km",
         unsafe_allow_html=True,
     )
-
-st.divider()
-chart_l, chart_r = st.columns(2, gap="large")
-with chart_l:
-    st.subheader("The range is the product")
-    st.caption(
-        "Raw quantile models under-cover on future sales, so the served interval is "
-        "widened by conformal calibration (CQR) fitted on the most recent window."
-    )
-    st.pyplot(interval_figure(est_raw, est, cov_raw, cov_cal), width="stretch")
-with chart_r:
-    st.subheader("Why this price")
-    fig, base_price = shap_figure(bundle, row)
-    st.caption(
-        f"Per-prediction SHAP: starting from the market baseline of {_sgd(base_price)}, "
-        f"each feature pushes the estimate up or down to land at {_sgd(est['point'])}."
-    )
-    st.pyplot(fig, width="stretch")
-
-st.divider()
-real_l, real_r = st.columns(2, gap="large")
-with real_l:
-    st.subheader("Against the actual market")
+with market_col, st.container(border=True):
+    st.markdown("**Against the actual market**")
     fig = trend_figure(trends, town, flat_type, est)
     if fig is None:
         st.info(f"Too few recorded {flat_type.title()} sales in {town.title()} to plot a trend.")
     else:
         st.pyplot(fig, width="stretch")
-with real_r:
-    st.subheader(f"Recent {flat_type.title()} sales in {town.title()}")
+        st.caption(
+            "The line is what buyers actually paid, month by month. The dot is this "
+            "flat's estimate, with its 80% range."
+        )
+
+tab_why, tab_conf, tab_sales, tab_method = st.tabs(
+    ["Why this price?", "How confident are we, really?", "Recent sales nearby",
+     "Model & methodology"]
+)
+
+with tab_why:
+    fig, base_price = shap_figure(bundle, row)
+    st.caption(
+        f"Starting from a typical resale flat at today's market level ({_sgd(base_price)}), "
+        f"each detail of your flat pushes the estimate up or down to land at "
+        f"{_sgd(est['point'])}."
+    )
+    st.pyplot(fig, width="stretch")
+
+with tab_conf:
+    st.markdown(
+        "The price above isn't a single guess — it's a range built to contain the real "
+        "sale price **8 times out of 10**. We don't just claim that: we checked it on "
+        f"{test_metrics['n']:,} sales from 2026 that the model never saw."
+    )
+    st.markdown(
+        f"- The model's raw range caught only **{cov_raw:.0f}%** of those real prices — "
+        "too narrow, because prices kept climbing after training.\n"
+        f"- So we widen it using a held-out recent window (conformal calibration), which "
+        f"brings coverage to **{cov_cal:.0f}%**. That's the range you see above."
+        + (
+            f"\n- Recalibrating every month as new sales arrive gets **{cov_adaptive:.0f}%** — "
+            "tracked in the pipeline as the deployment-ready variant."
+            if cov_adaptive
+            else ""
+        )
+    )
+    st.pyplot(interval_figure(est_raw, est, cov_raw, cov_cal), width="stretch")
+    town_err = errors[errors["town"] == town]
+    if not town_err.empty:
+        rank = int((errors["mape_pct"] < town_err["mape_pct"].iloc[0]).sum()) + 1
+        st.caption(
+            f"In {town.title()} specifically, the estimate missed real 2026 sale prices by "
+            f"{town_err['mape_pct'].iloc[0]:.1f}% on average — rank {rank} of {len(errors)} "
+            "towns, where 1 is the most accurate."
+        )
+
+with tab_sales:
+    st.markdown(f"**Recent {flat_type.title()} sales in {town.title()}**")
     sales = recent[(recent["town"] == town) & (recent["flat_type"] == flat_type)].head(8)
     if sales.empty:
         st.info("No transactions in the last three months for this combination.")
@@ -367,11 +477,27 @@ with real_r:
                 "resale_price": st.column_config.NumberColumn("Sold for", format="S$%,d"),
             },
         )
-    town_err = errors[errors["town"] == town]
-    if not town_err.empty:
-        rank = int((errors["mape_pct"] < town_err["mape_pct"].iloc[0]).sum()) + 1
-        st.caption(
-            f"Honesty check: on unseen 2026 sales in {town.title()}, the point model "
-            f"was off by {town_err['mape_pct'].iloc[0]:.1f}% on average "
-            f"(rank {rank} of {len(errors)} towns, 1 = most accurate)."
-        )
+
+with tab_method:
+    st.markdown(
+        f"""
+- **Data** · {meta["n_train"]:,} training transactions, live from data.gov.sg
+- **Trained through** · {meta["trained_through"]}
+- **Tested on** · {meta["tested_on"]} (never seen in training)
+- **Models** · LightGBM point + P10/P50/P90 quantile models on log price,
+  with conformalized quantile regression (CQR) for the served interval
+"""
+    )
+    c1, c2 = st.columns(2)
+    c1.metric("2026 test MAPE", f"{test_metrics['lightgbm_point']['mape_pct']:.1f}%")
+    c2.metric("2026 test MAE", _sgd(test_metrics["lightgbm_point"]["mae"]))
+    st.markdown("**Interval coverage** (80% nominal)")
+    rows = [("Raw P10–P90 quantiles", cov_raw), ("+ CQR, frozen q̂ (served here)", cov_cal)]
+    if cov_adaptive:
+        rows.append(("+ monthly adaptive recalibration", cov_adaptive))
+    st.markdown("\n".join(f"- {label}: **{v:.0f}%**" for label, v in rows))
+    st.caption(
+        "Every number above is out-of-time: the model prices 2026 flats knowing "
+        "only 2017–2024. The gap to the nominal 80% is honest, measured price drift."
+    )
+    st.markdown("[Source & methodology on GitHub](https://github.com/DevansuA/hdb-lens)")
