@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from hdblens.config import FEATURES, TARGET
-from hdblens.conformal import cqr_correction, predict_interval
+from hdblens.conformal import adaptive_qhat, cqr_correction, predict_interval
 from hdblens.predict import predict_price
 
 
@@ -53,6 +53,32 @@ def test_cqr_correction_restores_coverage_on_calibration_set():
     assert q_hat > 0
     lo, hi = predict_interval(bundle, calib, q_hat)
     assert ((y >= lo) & (y <= hi)).mean() >= 0.80
+
+
+def test_adaptive_qhat_tracks_drift():
+    rng = np.random.default_rng(1)
+    bundle = _stub_bundle(520_000, 580_000)
+
+    def _month_frame(period: str, drift: float, n: int = 200) -> pd.DataFrame:
+        df = _feature_frame(n)
+        df["month"] = pd.Period(period, freq="M")
+        df[TARGET] = 550_000 * np.exp(rng.normal(drift, 0.05, n))
+        return df
+
+    calib = pd.concat([_month_frame(f"2025-{m:02d}", 0.0) for m in (10, 11, 12)])
+    test = pd.concat(
+        [_month_frame(f"2026-0{i}", drift) for i, drift in [(1, 0.05), (2, 0.10), (3, 0.15)]]
+    )
+
+    monthly, overall = adaptive_qhat(bundle, calib, test, coverage=0.80, window=3)
+    assert monthly["month"].tolist() == ["2026-01", "2026-02", "2026-03"]
+    assert monthly["q_hat"].iloc[-1] > monthly["q_hat"].iloc[0]  # widens as drift grows
+
+    frozen = cqr_correction(bundle, calib, coverage=0.80)
+    lo, hi = predict_interval(bundle, test, frozen)
+    y = test[TARGET].to_numpy()
+    frozen_coverage = ((y >= lo) & (y <= hi)).mean() * 100
+    assert overall["empirical_coverage_pct"] > frozen_coverage
 
 
 def test_predict_price_applies_cqr_correction():
