@@ -18,7 +18,7 @@ import pandas as pd
 import shap
 
 from hdblens.config import FEATURES, FIGURE_DIR, MODEL_DIR, TARGET, TRAIN_END, VAL_END
-from hdblens.conformal import cqr_correction, interval_report, predict_interval
+from hdblens.conformal import adaptive_qhat, cqr_correction, interval_report, predict_interval
 from hdblens.evaluate import error_by_group, evaluate_split
 from hdblens.features import build_features, temporal_split
 from hdblens.ingest import download_resale_data
@@ -75,6 +75,55 @@ def make_figures(bundle: dict, test: pd.DataFrame) -> None:
     plt.close(fig)
 
 
+def make_adaptive_figure(
+    bundle: dict, test: pd.DataFrame, q_hat: float, monthly: pd.DataFrame
+) -> None:
+    """Per-month 2026 coverage: raw quantiles vs frozen CQR vs adaptive CQR."""
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    y = test[TARGET].to_numpy()
+    months = monthly["month"].tolist()
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for label, q, color in [
+        ("Raw quantiles", 0.0, "#898781"),
+        ("Frozen CQR", q_hat, "#2a78d6"),
+    ]:
+        lo, hi = predict_interval(bundle, test, q)
+        cov = pd.Series((y >= lo) & (y <= hi)).groupby(test["month"].astype(str).values).mean()
+        ax.plot(months, cov.reindex(months) * 100, "-o", color=color, lw=2, ms=5, label=label)
+    ax.plot(
+        months, monthly["coverage_pct"], "-o", color="#1baf7a", lw=2, ms=5,
+        label="Adaptive CQR (monthly recalibration)",
+    )
+    ax.axhline(80, ls="--", lw=1, color="#c3c2b7")
+    ax.text(len(months) - 0.55, 80.7, "80% nominal", color="#898781", fontsize=8, ha="right")
+    ax.set(xlabel="2026 test month", ylabel="Empirical coverage (%)",
+           title="Interval coverage under 2026 market drift")
+    ax.legend(loc="lower left")
+    fig.tight_layout()
+    fig.savefig(FIGURE_DIR / "adaptive_coverage.png")
+    plt.close(fig)
+
+
+def export_app_artifacts(bundle: dict, df: pd.DataFrame, test: pd.DataFrame) -> None:
+    """Compact CSVs the Streamlit app reads: per-town monthly price medians,
+    the latest transactions, and per-town error on the 2026 test set."""
+    trends = (
+        df.groupby(["month", "town", "flat_type"], observed=True)[TARGET]
+        .agg(median_price="median", n="size")
+        .reset_index()
+    )
+    trends.to_csv(MODEL_DIR / "town_trends.csv", index=False)
+
+    cols = ["month", "town", "flat_type", "flat_model", "storey_range",
+            "floor_area_sqm", "remaining_lease", "resale_price"]
+    recent = df[df["month"] > df["month"].max() - 3].sort_values("month", ascending=False)
+    recent[cols].to_csv(MODEL_DIR / "recent_sales.csv", index=False)
+
+    error_by_group(bundle, test, "town").reset_index().to_csv(
+        MODEL_DIR / "town_errors.csv", index=False
+    )
+
+
 def main(refresh: bool) -> None:
     path = download_resale_data(force=refresh)
     raw = pd.read_csv(path)
@@ -100,7 +149,13 @@ def main(refresh: bool) -> None:
         test[TARGET].to_numpy(), lo, hi
     )
     metrics["cqr_q_hat"] = q_hat
+
+    monthly, adaptive_overall = adaptive_qhat(bundle, val, test, coverage=0.80)
+    metrics["test_2026"]["interval_p10_p90_adaptive"] = adaptive_overall
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    monthly.to_csv(MODEL_DIR / "adaptive_coverage.csv", index=False)
+    make_adaptive_figure(bundle, test, q_hat, monthly)
+
     (MODEL_DIR / "metrics.json").write_text(json.dumps(metrics, indent=2))
     print(json.dumps(metrics, indent=2))
 
@@ -117,6 +172,7 @@ def main(refresh: bool) -> None:
             "features": FEATURES,
         },
     )
+    export_app_artifacts(bundle, df, test)
     make_figures(bundle, test)
     logger.info("Figures written to %s", FIGURE_DIR)
 

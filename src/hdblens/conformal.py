@@ -41,6 +41,45 @@ def predict_interval(
     return lo, hi
 
 
+def adaptive_qhat(
+    bundle: dict,
+    calib: pd.DataFrame,
+    test: pd.DataFrame,
+    coverage: float = 0.80,
+    window: int = 6,
+) -> tuple[pd.DataFrame, dict[str, float]]:
+    """Adaptive conformal calibration under distribution shift.
+
+    A q_hat frozen at deployment decays as the market drifts. Instead,
+    recalibrate monthly: before pricing each test month, recompute q_hat on
+    the trailing `window` months of *observed* transactions (mimicking
+    production, where last month's sales are known before this month's
+    pricing). Returns a per-month table (q_hat, coverage) and the overall
+    interval report.
+    """
+    history = calib
+    rows, ys, los, his = [], [], [], []
+    for month, grp in test.groupby("month", sort=True):
+        recent = history[history["month"] > month - window]
+        q_hat = cqr_correction(bundle, recent, coverage)
+        lo, hi = predict_interval(bundle, grp, q_hat)
+        y = grp[TARGET].to_numpy()
+        rows.append(
+            {
+                "month": str(month),
+                "n": int(len(grp)),
+                "q_hat": q_hat,
+                "coverage_pct": float(((y >= lo) & (y <= hi)).mean() * 100),
+            }
+        )
+        ys.append(y)
+        los.append(lo)
+        his.append(hi)
+        history = pd.concat([history, grp])
+    overall = interval_report(np.concatenate(ys), np.concatenate(los), np.concatenate(his))
+    return pd.DataFrame(rows), overall
+
+
 def interval_report(y: np.ndarray, lo: np.ndarray, hi: np.ndarray) -> dict[str, float]:
     covered = (y >= lo) & (y <= hi)
     return {
