@@ -4,3 +4,8 @@ primaryColor = "#2450c9"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f5f4f1"
 textColor = "#1c1b17"
+font = "Inter, sans-serif"
+headingFont = "Fraunces, serif"
+
+[client]
+toolbarMode = "minimal"

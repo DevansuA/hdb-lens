@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
+from matplotlib import font_manager
 from matplotlib.ticker import FuncFormatter
 
 from hdblens.config import CATEGORICAL_FEATURES, CBD, MODEL_DIR, REGIONAL_CENTRES, TOWN_COORDS
@@ -40,6 +41,27 @@ RED = "#b8442c"
 def _rgb(hex_color: str, alpha: int = 255) -> list[int]:
     return [int(hex_color[i : i + 2], 16) for i in (1, 3, 5)] + [alpha]
 
+
+# Charts share the app's body face and palette so they read as part of the
+# product, not notebook output.
+for _font in (Path(__file__).resolve().parent / "assets" / "fonts").glob("*.ttf"):
+    font_manager.fontManager.addfont(str(_font))
+plt.rcParams.update(
+    {
+        "font.family": "Inter",
+        "font.size": 9,
+        "text.color": INK,
+        "axes.labelcolor": MUTED,
+        "xtick.color": MUTED,
+        "ytick.color": MUTED,
+        "axes.edgecolor": LINE,
+        "axes.linewidth": 0.8,
+        "figure.facecolor": "none",
+        "axes.facecolor": "none",
+        "savefig.dpi": 200,
+    }
+)
+
 FEATURE_LABELS = {
     "town": "Town",
     "flat_type": "Flat type",
@@ -53,8 +75,39 @@ FEATURE_LABELS = {
     "month_index": "Market month (trend)",
 }
 
-HERO_CSS = """
+# The mark: a house whose walls bracket a calibrated range, with the point
+# estimate as the node on it. Hand-drawn vector, two-tone, reads at 24px.
+WORDMARK_SVG = """<svg width="27" height="27" viewBox="0 0 32 32" fill="none" \
+xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HDB-Lens">\
+<path d="M4.5 14.5 16 4.5l11.5 10" stroke="#1c1b17" stroke-width="3" \
+stroke-linecap="round" stroke-linejoin="round"/>\
+<path d="M8 15.5v11M24 15.5v11" stroke="#1c1b17" stroke-width="3" stroke-linecap="round"/>\
+<path d="M10 26.5h12" stroke="#2450c9" stroke-width="3" stroke-linecap="round"/>\
+<circle cx="16" cy="26.5" r="3.1" fill="#2450c9"/></svg>"""
+
+APP_CSS = """
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
+
+#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] {
+    display: none;
+}
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+.brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0.1rem 0 1.1rem;
+}
+.brand-name {
+    font-family: 'Fraunces', serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #1c1b17;
+}
 .hero-card {
     border: 1px solid #e5e3da;
     border-radius: 16px;
@@ -72,9 +125,10 @@ HERO_CSS = """
     margin-bottom: 0.35rem;
 }
 .hero-price {
-    font-size: 3.6rem;
-    font-weight: 750;
-    letter-spacing: -0.025em;
+    font-family: 'Fraunces', serif;
+    font-size: 3.8rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
     line-height: 1.05;
     color: #1c1b17;
 }
@@ -366,9 +420,13 @@ cov_adaptive = test_metrics.get("interval_p10_p90_adaptive", {}).get("empirical_
 n_sales = meta["n_train"] + metrics["val_2025"]["n"] + test_metrics["n"]
 n_sales_str = f"{round(n_sales, -4):,}+"
 
-st.markdown(HERO_CSS, unsafe_allow_html=True)
+st.markdown(APP_CSS, unsafe_allow_html=True)
 
-st.title("🏠 What's your HDB flat worth?")
+st.markdown(
+    f'<div class="brand-row">{WORDMARK_SVG}<span class="brand-name">HDB-Lens</span></div>',
+    unsafe_allow_html=True,
+)
+st.title("What's your HDB flat worth?")
 st.caption(
     f"Priced from {n_sales_str} real resale transactions published by data.gov.sg."
 )
