@@ -293,19 +293,21 @@ def interval_figure(raw: dict, cal: dict, cov_raw: float, cov_cal: float) -> plt
         (0, cal, ACCENT, f"Calibrated range (what you see)\ncaught {cov_cal:.0f}%"),
     ]
     for y, est, color, _ in rows:
-        ax.plot([est["p10"], est["p90"]], [y, y], color=color, lw=7, solid_capstyle="round")
-        ax.text(est["p10"], y + 0.22, _sgd(est["p10"]), ha="center", fontsize=8, color=MUTED)
-        ax.text(est["p90"], y + 0.22, _sgd(est["p90"]), ha="center", fontsize=8, color=MUTED)
-    ax.plot([cal["p50"]], [0], "o", ms=7, color=INK, zorder=5)
-    ax.text(cal["p50"], -0.42, f"midpoint {_sgd(cal['p50'])}", ha="center", fontsize=8, color=INK)
+        ax.plot([est["p10"], est["p90"]], [y, y], color=color, lw=8, solid_capstyle="round")
+        ax.text(est["p10"], y + 0.24, _sgd_k(est["p10"]), ha="center", fontsize=8, color=MUTED)
+        ax.text(est["p90"], y + 0.24, _sgd_k(est["p90"]), ha="center", fontsize=8, color=MUTED)
+    ax.plot([cal["p50"]], [0], "o", ms=8, color=INK, mec="white", mew=1.6, zorder=5)
+    ax.text(
+        cal["p50"], -0.46, f"midpoint {_sgd_k(cal['p50'])}", ha="center", fontsize=8, color=INK
+    )
     ax.set_yticks([r[0] for r in rows], [r[3] for r in rows], fontsize=8.5, color=INK)
-    ax.set_ylim(-0.8, 1.7)
+    ax.set_ylim(-0.85, 1.7)
     span = cal["p90"] - cal["p10"]
     ax.set_xlim(cal["p10"] - 0.25 * span, cal["p90"] + 0.25 * span)
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x / 1e3:,.0f}k"))
-    _style_axis(ax)
-    ax.spines["left"].set_visible(False)
-    ax.tick_params(axis="y", length=0)
+    ax.set_xticks([])
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(axis="y", length=0, colors=INK)
     fig.tight_layout()
     return fig
 
@@ -373,18 +375,23 @@ def shap_figure(effects: pd.Series, row: pd.DataFrame) -> plt.Figure:
     labels = [f"{FEATURE_LABELS[f]} · {values[f]}" for f in pct.index]
 
     fig, ax = plt.subplots(figsize=(6.4, 3.6))
-    colors = [ACCENT if v >= 0 else RED for v in pct]
-    ax.barh(labels, pct, color=colors, height=0.62)
-    for i, v in enumerate(pct):
-        ax.text(v + (0.4 if v >= 0 else -0.4), i, f"{v:+.1f}%", va="center",
-                ha="left" if v >= 0 else "right", fontsize=8, color=MUTED)
-    ax.axvline(0, color=LINE, lw=1)
-    ax.set_xlabel("Impact on estimated price (%)", fontsize=8.5, color=MUTED)
     lim = max(abs(pct.min()), abs(pct.max())) * 1.35 + 2
+    pad = lim * 0.05
+    for i, (label, v) in enumerate(zip(labels, pct)):
+        color = ACCENT if v >= 0 else RED
+        ax.plot([0, v], [i, i], color=color, lw=8, solid_capstyle="round")
+        text = f"{v:+.1f}%" if abs(v) >= 0.05 else "0.0%"
+        ax.text(v + (pad if v >= 0 else -pad), i, text, va="center",
+                ha="left" if v >= 0 else "right", fontsize=8, color=MUTED)
+    ax.axvline(0, color=LINE, lw=1, zorder=0)
+    ax.set_xlabel("Impact on estimated price (%)", fontsize=8.5, color=MUTED)
     ax.set_xlim(-lim, lim)
-    ax.grid(axis="x", color=LINE, lw=0.7)
-    _style_axis(ax)
-    ax.tick_params(axis="y", length=0, labelsize=8.5)
+    ax.set_ylim(-0.6, len(labels) - 0.4)
+    ax.set_yticks(range(len(labels)), labels)
+    ax.set_xticks([])
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(axis="y", length=0, labelsize=8.5, colors=INK)
     fig.tight_layout()
     return fig
 
@@ -395,18 +402,20 @@ def trend_figure(trends: pd.DataFrame, town: str, flat_type: str, est: dict) -> 
         return None
     x = pd.PeriodIndex(t["month"], freq="M").to_timestamp()
     fig, ax = plt.subplots(figsize=(6.4, 3.1))
-    ax.plot(x, t["median_price"] / 1e3, color=ACCENT, lw=1.7,
+    ax.plot(x, t["median_price"] / 1e3, color=ACCENT, lw=2, solid_capstyle="round",
+            solid_joinstyle="round",
             label=f"Median actual sale · {flat_type.title()} in {town.title()}")
     mx = x.max()
     ax.errorbar([mx], [est["p50"] / 1e3],
                 yerr=[[(est["p50"] - est["p10"]) / 1e3], [(est["p90"] - est["p50"]) / 1e3]],
-                fmt="o", ms=6, color=INK, ecolor=ACCENT_SOFT, elinewidth=5, capsize=0,
-                label="This flat · estimate with 80% range")
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}k"))
-    ax.set_ylabel("Price (S$ '000)", fontsize=8.5, color=MUTED)
+                fmt="o", ms=7, color=INK, mec="white", mew=1.4, ecolor=ACCENT_SOFT,
+                elinewidth=6, capsize=0, label="This flat · estimate with 80% range")
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"S${v:,.0f}k"))
     ax.grid(axis="y", color=LINE, lw=0.7)
-    ax.legend(fontsize=8, loc="upper left", frameon=False)
+    ax.legend(fontsize=8, loc="upper left", frameon=False, labelcolor=INK)
     _style_axis(ax)
+    ax.spines["left"].set_visible(False)
+    ax.tick_params(axis="y", length=0)
     fig.tight_layout()
     return fig
 
