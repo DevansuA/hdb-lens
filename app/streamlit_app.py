@@ -149,7 +149,7 @@ def _sgd(x: float) -> str:
 
 
 def _sgd_k(x: float) -> str:
-    """Round to the nearest thousand — honest precision for a price estimate."""
+    """Round to the nearest thousand; an estimate should not pretend to dollar precision."""
     return f"S${round(x, -3):,.0f}"
 
 
@@ -372,8 +372,7 @@ st.markdown(HERO_CSS, unsafe_allow_html=True)
 
 st.title("🏠 What's your HDB flat worth?")
 st.caption(
-    f"HDB-Lens gives you an instant, honest estimate — learned from {n_sales_str} real "
-    "resale transactions published by data.gov.sg."
+    f"Priced from {n_sales_str} real resale transactions published by data.gov.sg."
 )
 
 with st.container(border=True):
@@ -474,18 +473,19 @@ with tab_why:
 
 with tab_conf:
     st.markdown(
-        "The price above isn't a single guess — it's a range built to contain the real "
-        "sale price **8 times out of 10**. We don't just claim that: we checked it on "
+        "The price above is not a single guess. It is a range built to catch the real "
+        "sale price **8 times out of 10**, and we checked that claim on "
         f"{test_metrics['n']:,} sales from 2026 that the model never saw."
     )
     st.markdown(
-        f"- The model's raw range caught only **{cov_raw:.0f}%** of those real prices — "
-        "too narrow, because prices kept climbing after training.\n"
+        f"- The model's raw range caught only **{cov_raw:.0f}%** of those real prices. "
+        "It ran too narrow because prices kept climbing after training.\n"
         f"- So we widen it using a held-out recent window (conformal calibration), which "
-        f"brings coverage to **{cov_cal:.0f}%**. That's the range you see above."
+        f"brings coverage to **{cov_cal:.0f}%**. That is the range you see above."
         + (
-            f"\n- Recalibrating every month as new sales arrive gets **{cov_adaptive:.0f}%** — "
-            "tracked in the pipeline as the deployment-ready variant."
+            f"\n- Recalibrating every month as new sales arrive reaches "
+            f"**{cov_adaptive:.0f}%**. The pipeline tracks this as the "
+            "deployment-ready variant."
             if cov_adaptive
             else ""
         )
@@ -496,8 +496,8 @@ with tab_conf:
         rank = int((errors["mape_pct"] < town_err["mape_pct"].iloc[0]).sum()) + 1
         st.caption(
             f"In {town.title()} specifically, the estimate missed real 2026 sale prices by "
-            f"{town_err['mape_pct'].iloc[0]:.1f}% on average — rank {rank} of {len(errors)} "
-            "towns, where 1 is the most accurate."
+            f"{town_err['mape_pct'].iloc[0]:.1f}% on average. That ranks {rank} of "
+            f"{len(errors)} towns, where rank 1 is the most accurate."
         )
 
 with tab_sales:
