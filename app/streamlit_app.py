@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
+from matplotlib import font_manager
 from matplotlib.ticker import FuncFormatter
 
 from hdblens.config import CATEGORICAL_FEATURES, CBD, MODEL_DIR, REGIONAL_CENTRES, TOWN_COORDS
@@ -27,17 +28,39 @@ from hdblens.train import load_bundle
 
 st.set_page_config(page_title="HDB-Lens", page_icon="🏠", layout="wide")
 
-INK = "#0b0b0b"
-INK_2 = "#52514e"
-MUTED = "#898781"
-GRID = "#e1e0d9"
-BASELINE = "#c3c2b7"
-BLUE = "#2a78d6"
-BLUE_LIGHT = "#9ec5f4"
-AQUA = "#1baf7a"
-RED = "#e34948"
-ORANGE = "#eb6834"
-VIOLET = "#4a3aa7"
+# One ink, one accent, and their supporting tints. RED is reserved for
+# "pushes the price down" and nothing else.
+INK = "#1c1b17"
+MUTED = "#78756c"
+LINE = "#e5e3da"
+ACCENT = "#2450c9"
+ACCENT_SOFT = "#c9d6f2"
+RED = "#b8442c"
+
+
+def _rgb(hex_color: str, alpha: int = 255) -> list[int]:
+    return [int(hex_color[i : i + 2], 16) for i in (1, 3, 5)] + [alpha]
+
+
+# Charts share the app's body face and palette so they read as part of the
+# product, not notebook output.
+for _font in (Path(__file__).resolve().parent / "assets" / "fonts").glob("*.ttf"):
+    font_manager.fontManager.addfont(str(_font))
+plt.rcParams.update(
+    {
+        "font.family": "Inter",
+        "font.size": 9,
+        "text.color": INK,
+        "axes.labelcolor": MUTED,
+        "xtick.color": MUTED,
+        "ytick.color": MUTED,
+        "axes.edgecolor": LINE,
+        "axes.linewidth": 0.8,
+        "figure.facecolor": "none",
+        "axes.facecolor": "none",
+        "savefig.dpi": 200,
+    }
+)
 
 FEATURE_LABELS = {
     "town": "Town",
@@ -52,13 +75,44 @@ FEATURE_LABELS = {
     "month_index": "Market month (trend)",
 }
 
-HERO_CSS = """
+# The mark: a house whose walls bracket a calibrated range, with the point
+# estimate as the node on it. Hand-drawn vector, two-tone, reads at 24px.
+WORDMARK_SVG = """<svg width="27" height="27" viewBox="0 0 32 32" fill="none" \
+xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HDB-Lens">\
+<path d="M4.5 14.5 16 4.5l11.5 10" stroke="#1c1b17" stroke-width="3" \
+stroke-linecap="round" stroke-linejoin="round"/>\
+<path d="M8 15.5v11M24 15.5v11" stroke="#1c1b17" stroke-width="3" stroke-linecap="round"/>\
+<path d="M10 26.5h12" stroke="#2450c9" stroke-width="3" stroke-linecap="round"/>\
+<circle cx="16" cy="26.5" r="3.1" fill="#2450c9"/></svg>"""
+
+APP_CSS = """
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
+
+#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] {
+    display: none;
+}
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+.brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0.1rem 0 1.1rem;
+}
+.brand-name {
+    font-family: 'Fraunces', serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #1c1b17;
+}
 .hero-card {
-    border: 1px solid #e1e0d9;
+    border: 1px solid #e5e3da;
     border-radius: 16px;
     background: #ffffff;
-    box-shadow: 0 1px 2px rgba(11, 11, 11, 0.04), 0 8px 24px rgba(11, 11, 11, 0.05);
+    box-shadow: 0 1px 2px rgba(28, 27, 23, 0.04), 0 8px 24px rgba(28, 27, 23, 0.05);
     padding: 2.2rem 2.4rem 2rem;
     margin: 0.4rem 0 0.6rem;
 }
@@ -67,26 +121,27 @@ HERO_CSS = """
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #898781;
+    color: #78756c;
     margin-bottom: 0.35rem;
 }
 .hero-price {
-    font-size: 3.6rem;
-    font-weight: 750;
-    letter-spacing: -0.025em;
+    font-family: 'Fraunces', serif;
+    font-size: 3.8rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
     line-height: 1.05;
-    color: #0b0b0b;
+    color: #1c1b17;
 }
 .hero-persqm {
     font-size: 0.9rem;
-    color: #52514e;
+    color: #78756c;
     margin-top: 0.3rem;
 }
 .hero-range-track {
     position: relative;
     height: 10px;
     border-radius: 999px;
-    background: linear-gradient(90deg, #dce9fa, #9ec5f4 50%, #dce9fa);
+    background: #c9d6f2;
     margin: 1.4rem 0 0.45rem;
 }
 .hero-range-marker {
@@ -96,21 +151,21 @@ HERO_CSS = """
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: #2a78d6;
+    background: #2450c9;
     border: 3px solid #ffffff;
-    box-shadow: 0 0 0 1px #2a78d6;
+    box-shadow: 0 0 0 1px #2450c9;
 }
 .hero-range-labels {
     display: flex;
     justify-content: space-between;
     font-size: 0.82rem;
-    color: #52514e;
+    color: #78756c;
     margin-bottom: 1.1rem;
 }
 .hero-sentence {
     font-size: 1.08rem;
     line-height: 1.55;
-    color: #0b0b0b;
+    color: #1c1b17;
     max-width: 46rem;
     margin: 0;
 }
@@ -149,7 +204,7 @@ def _sgd(x: float) -> str:
 
 
 def _sgd_k(x: float) -> str:
-    """Round to the nearest thousand — honest precision for a price estimate."""
+    """Round to the nearest thousand; an estimate should not pretend to dollar precision."""
     return f"S${round(x, -3):,.0f}"
 
 
@@ -172,8 +227,8 @@ def _style_axis(ax) -> None:
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
-        ax.spines[side].set_color(BASELINE)
-    ax.tick_params(colors=INK_2, labelsize=8)
+        ax.spines[side].set_color(LINE)
+    ax.tick_params(colors=MUTED, labelsize=8)
     ax.set_axisbelow(True)
 
 
@@ -183,42 +238,39 @@ def town_map(town: str) -> pdk.Deck:
     )
     selected = towns[towns["name"] == town]
     anchors = pd.DataFrame(
-        [{"name": "CBD (Raffles Place)", "lat": CBD[0], "lon": CBD[1], "color": [235, 104, 52]}]
-        + [
-            {"name": n, "lat": lat, "lon": lon, "color": [74, 58, 167]}
-            for n, (lat, lon) in REGIONAL_CENTRES.items()
-        ]
+        [{"name": "CBD (Raffles Place)", "lat": CBD[0], "lon": CBD[1]}]
+        + [{"name": n, "lat": lat, "lon": lon} for n, (lat, lon) in REGIONAL_CENTRES.items()]
     )
     s_lat, s_lon = TOWN_COORDS[town]
     rc_name, _ = nearest_regional_centre(s_lat, s_lon)
     rc = REGIONAL_CENTRES[rc_name]
     lines = pd.DataFrame(
         [
-            {"from": [s_lon, s_lat], "to": [CBD[1], CBD[0]], "color": [235, 104, 52]},
-            {"from": [s_lon, s_lat], "to": [rc[1], rc[0]], "color": [74, 58, 167]},
+            {"from": [s_lon, s_lat], "to": [CBD[1], CBD[0]]},
+            {"from": [s_lon, s_lat], "to": [rc[1], rc[0]]},
         ]
     )
     layers = [
         pdk.Layer(
             "ScatterplotLayer", towns, get_position="[lon, lat]", get_radius=450,
-            get_fill_color=[137, 135, 129, 150], pickable=True,
+            get_fill_color=_rgb(MUTED, 140), pickable=True,
         ),
         pdk.Layer(
             "LineLayer", lines, get_source_position="from", get_target_position="to",
-            get_color="color", get_width=2.5,
+            get_color=_rgb(MUTED, 200), get_width=2,
         ),
         pdk.Layer(
             "ScatterplotLayer", anchors, get_position="[lon, lat]", get_radius=550,
-            get_fill_color="color", pickable=True,
+            get_fill_color=_rgb(INK, 235), pickable=True,
         ),
         pdk.Layer(
             "ScatterplotLayer", selected, get_position="[lon, lat]", get_radius=800,
-            get_fill_color=[42, 120, 214, 230], pickable=True,
+            get_fill_color=_rgb(ACCENT, 235), pickable=True,
         ),
         pdk.Layer(
             "TextLayer", pd.concat([anchors, selected.assign(name=town.title())]),
             get_position="[lon, lat]", get_text="name", get_size=11,
-            get_color=[82, 81, 78], get_pixel_offset=[0, -14],
+            get_color=_rgb(MUTED), get_pixel_offset=[0, -14],
         ),
     ]
     view = pdk.ViewState(latitude=1.352, longitude=103.82, zoom=10)
@@ -237,23 +289,25 @@ def nearest_regional_centre(lat: float, lon: float) -> tuple[str, float]:
 def interval_figure(raw: dict, cal: dict, cov_raw: float, cov_cal: float) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(6.4, 2.0))
     rows = [
-        (1, raw, BASELINE, f"Model's raw range\ncaught {cov_raw:.0f}% of real 2026 prices"),
-        (0, cal, BLUE, f"Calibrated range (what you see)\ncaught {cov_cal:.0f}%"),
+        (1, raw, ACCENT_SOFT, f"Model's raw range\ncaught {cov_raw:.0f}% of real 2026 prices"),
+        (0, cal, ACCENT, f"Calibrated range (what you see)\ncaught {cov_cal:.0f}%"),
     ]
     for y, est, color, _ in rows:
-        ax.plot([est["p10"], est["p90"]], [y, y], color=color, lw=7, solid_capstyle="round")
-        ax.text(est["p10"], y + 0.22, _sgd(est["p10"]), ha="center", fontsize=8, color=INK_2)
-        ax.text(est["p90"], y + 0.22, _sgd(est["p90"]), ha="center", fontsize=8, color=INK_2)
-    ax.plot([cal["p50"]], [0], "o", ms=7, color=INK, zorder=5)
-    ax.text(cal["p50"], -0.42, f"midpoint {_sgd(cal['p50'])}", ha="center", fontsize=8, color=INK)
+        ax.plot([est["p10"], est["p90"]], [y, y], color=color, lw=8, solid_capstyle="round")
+        ax.text(est["p10"], y + 0.24, _sgd_k(est["p10"]), ha="center", fontsize=8, color=MUTED)
+        ax.text(est["p90"], y + 0.24, _sgd_k(est["p90"]), ha="center", fontsize=8, color=MUTED)
+    ax.plot([cal["p50"]], [0], "o", ms=8, color=INK, mec="white", mew=1.6, zorder=5)
+    ax.text(
+        cal["p50"], -0.46, f"midpoint {_sgd_k(cal['p50'])}", ha="center", fontsize=8, color=INK
+    )
     ax.set_yticks([r[0] for r in rows], [r[3] for r in rows], fontsize=8.5, color=INK)
-    ax.set_ylim(-0.8, 1.7)
+    ax.set_ylim(-0.85, 1.7)
     span = cal["p90"] - cal["p10"]
     ax.set_xlim(cal["p10"] - 0.25 * span, cal["p90"] + 0.25 * span)
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x / 1e3:,.0f}k"))
-    _style_axis(ax)
-    ax.spines["left"].set_visible(False)
-    ax.tick_params(axis="y", length=0)
+    ax.set_xticks([])
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(axis="y", length=0, colors=INK)
     fig.tight_layout()
     return fig
 
@@ -321,18 +375,23 @@ def shap_figure(effects: pd.Series, row: pd.DataFrame) -> plt.Figure:
     labels = [f"{FEATURE_LABELS[f]} · {values[f]}" for f in pct.index]
 
     fig, ax = plt.subplots(figsize=(6.4, 3.6))
-    colors = [BLUE if v >= 0 else RED for v in pct]
-    ax.barh(labels, pct, color=colors, height=0.62)
-    for i, v in enumerate(pct):
-        ax.text(v + (0.4 if v >= 0 else -0.4), i, f"{v:+.1f}%", va="center",
-                ha="left" if v >= 0 else "right", fontsize=8, color=INK_2)
-    ax.axvline(0, color=BASELINE, lw=1)
-    ax.set_xlabel("Impact on estimated price (%)", fontsize=8.5, color=INK_2)
     lim = max(abs(pct.min()), abs(pct.max())) * 1.35 + 2
+    pad = lim * 0.05
+    for i, (label, v) in enumerate(zip(labels, pct)):
+        color = ACCENT if v >= 0 else RED
+        ax.plot([0, v], [i, i], color=color, lw=8, solid_capstyle="round")
+        text = f"{v:+.1f}%" if abs(v) >= 0.05 else "0.0%"
+        ax.text(v + (pad if v >= 0 else -pad), i, text, va="center",
+                ha="left" if v >= 0 else "right", fontsize=8, color=MUTED)
+    ax.axvline(0, color=LINE, lw=1, zorder=0)
+    ax.set_xlabel("Impact on estimated price (%)", fontsize=8.5, color=MUTED)
     ax.set_xlim(-lim, lim)
-    ax.grid(axis="x", color=GRID, lw=0.7)
-    _style_axis(ax)
-    ax.tick_params(axis="y", length=0, labelsize=8.5)
+    ax.set_ylim(-0.6, len(labels) - 0.4)
+    ax.set_yticks(range(len(labels)), labels)
+    ax.set_xticks([])
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(axis="y", length=0, labelsize=8.5, colors=INK)
     fig.tight_layout()
     return fig
 
@@ -343,18 +402,20 @@ def trend_figure(trends: pd.DataFrame, town: str, flat_type: str, est: dict) -> 
         return None
     x = pd.PeriodIndex(t["month"], freq="M").to_timestamp()
     fig, ax = plt.subplots(figsize=(6.4, 3.1))
-    ax.plot(x, t["median_price"] / 1e3, color=BLUE, lw=1.7,
+    ax.plot(x, t["median_price"] / 1e3, color=ACCENT, lw=2, solid_capstyle="round",
+            solid_joinstyle="round",
             label=f"Median actual sale · {flat_type.title()} in {town.title()}")
     mx = x.max()
     ax.errorbar([mx], [est["p50"] / 1e3],
                 yerr=[[(est["p50"] - est["p10"]) / 1e3], [(est["p90"] - est["p50"]) / 1e3]],
-                fmt="o", ms=6, color=INK, ecolor=BLUE_LIGHT, elinewidth=5, capsize=0,
-                label="This flat · estimate with 80% range")
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}k"))
-    ax.set_ylabel("Price (S$ '000)", fontsize=8.5, color=INK_2)
-    ax.grid(axis="y", color=GRID, lw=0.7)
-    ax.legend(fontsize=8, loc="upper left", frameon=False)
+                fmt="o", ms=7, color=INK, mec="white", mew=1.4, ecolor=ACCENT_SOFT,
+                elinewidth=6, capsize=0, label="This flat · estimate with 80% range")
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"S${v:,.0f}k"))
+    ax.grid(axis="y", color=LINE, lw=0.7)
+    ax.legend(fontsize=8, loc="upper left", frameon=False, labelcolor=INK)
     _style_axis(ax)
+    ax.spines["left"].set_visible(False)
+    ax.tick_params(axis="y", length=0)
     fig.tight_layout()
     return fig
 
@@ -368,12 +429,15 @@ cov_adaptive = test_metrics.get("interval_p10_p90_adaptive", {}).get("empirical_
 n_sales = meta["n_train"] + metrics["val_2025"]["n"] + test_metrics["n"]
 n_sales_str = f"{round(n_sales, -4):,}+"
 
-st.markdown(HERO_CSS, unsafe_allow_html=True)
+st.markdown(APP_CSS, unsafe_allow_html=True)
 
-st.title("🏠 What's your HDB flat worth?")
+st.markdown(
+    f'<div class="brand-row">{WORDMARK_SVG}<span class="brand-name">HDB-Lens</span></div>',
+    unsafe_allow_html=True,
+)
+st.title("What's your HDB flat worth?")
 st.caption(
-    f"HDB-Lens gives you an instant, honest estimate — learned from {n_sales_str} real "
-    "resale transactions published by data.gov.sg."
+    f"Priced from {n_sales_str} real resale transactions published by data.gov.sg."
 )
 
 with st.container(border=True):
@@ -438,9 +502,9 @@ with map_col, st.container(border=True):
     rc_name, rc_km = nearest_regional_centre(*TOWN_COORDS[town])
     cbd_km = float(row["dist_cbd_km"].iloc[0])
     st.markdown(
-        f"<span style='color:{BLUE}'>●</span> {town.title()} &nbsp; "
-        f"<span style='color:{ORANGE}'>●</span> city centre · {cbd_km:.1f} km &nbsp; "
-        f"<span style='color:{VIOLET}'>●</span> nearest regional centre "
+        f"<span style='color:{ACCENT}'>●</span> {town.title()} &nbsp; "
+        f"<span style='color:{INK}'>●</span> city centre · {cbd_km:.1f} km &nbsp; "
+        f"<span style='color:{INK}'>●</span> nearest regional centre "
         f"({rc_name}) · {rc_km:.1f} km",
         unsafe_allow_html=True,
     )
@@ -474,18 +538,19 @@ with tab_why:
 
 with tab_conf:
     st.markdown(
-        "The price above isn't a single guess — it's a range built to contain the real "
-        "sale price **8 times out of 10**. We don't just claim that: we checked it on "
+        "The price above is not a single guess. It is a range built to catch the real "
+        "sale price **8 times out of 10**, and we checked that claim on "
         f"{test_metrics['n']:,} sales from 2026 that the model never saw."
     )
     st.markdown(
-        f"- The model's raw range caught only **{cov_raw:.0f}%** of those real prices — "
-        "too narrow, because prices kept climbing after training.\n"
+        f"- The model's raw range caught only **{cov_raw:.0f}%** of those real prices. "
+        "It ran too narrow because prices kept climbing after training.\n"
         f"- So we widen it using a held-out recent window (conformal calibration), which "
-        f"brings coverage to **{cov_cal:.0f}%**. That's the range you see above."
+        f"brings coverage to **{cov_cal:.0f}%**. That is the range you see above."
         + (
-            f"\n- Recalibrating every month as new sales arrive gets **{cov_adaptive:.0f}%** — "
-            "tracked in the pipeline as the deployment-ready variant."
+            f"\n- Recalibrating every month as new sales arrive reaches "
+            f"**{cov_adaptive:.0f}%**. The pipeline tracks this as the "
+            "deployment-ready variant."
             if cov_adaptive
             else ""
         )
@@ -496,8 +561,8 @@ with tab_conf:
         rank = int((errors["mape_pct"] < town_err["mape_pct"].iloc[0]).sum()) + 1
         st.caption(
             f"In {town.title()} specifically, the estimate missed real 2026 sale prices by "
-            f"{town_err['mape_pct'].iloc[0]:.1f}% on average — rank {rank} of {len(errors)} "
-            "towns, where 1 is the most accurate."
+            f"{town_err['mape_pct'].iloc[0]:.1f}% on average. That ranks {rank} of "
+            f"{len(errors)} towns, where rank 1 is the most accurate."
         )
 
 with tab_sales:
