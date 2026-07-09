@@ -258,10 +258,50 @@ def interval_figure(raw: dict, cal: dict, cov_raw: float, cov_cal: float) -> plt
     return fig
 
 
-def shap_figure(bundle: dict, row: pd.DataFrame) -> tuple[plt.Figure, float]:
+def contributions(bundle: dict, row: pd.DataFrame) -> tuple[pd.Series, float]:
+    """Per-feature SHAP contributions (log-price space) and the baseline price."""
     contribs = bundle["point"].predict(row, pred_contrib=True)[0]
     base_price = float(np.exp(contribs[-1]))
-    effects = pd.Series(contribs[:-1], index=row.columns)
+    return pd.Series(contribs[:-1], index=row.columns), base_price
+
+
+def driver_sentences(effects: pd.Series, row: pd.DataFrame, point_price: float) -> list[str]:
+    """Translate the largest SHAP contributions into plain-language dollar effects.
+
+    A feature's dollar effect is what the estimate would lose if its contribution
+    were removed: point * (1 - exp(-c)).
+    """
+    r = row.iloc[0]
+    phrases = {
+        "town": f"Being in {str(r['town']).title()}",
+        "flat_type": f"The {str(r['flat_type']).lower().replace(' ', '-')} flat type",
+        "flat_model": f"The “{r['flat_model']}” build",
+        "floor_area_sqm": f"A floor area of {r['floor_area_sqm']:.0f} sqm",
+        "storey_mid": f"Sitting on level {r['storey_mid']:.0f}",
+        "remaining_lease_months": (
+            f"Having {r['remaining_lease_months'] / 12:.0f} years left on the lease"
+        ),
+        "flat_age_years": f"The flat's age ({r['flat_age_years']:.0f} years)",
+        "dist_cbd_km": f"Being {r['dist_cbd_km']:.1f} km from the city centre",
+        "dist_regional_centre_km": (
+            f"Being {r['dist_regional_centre_km']:.1f} km from the nearest regional centre"
+        ),
+        "month_index": "Today's market level",
+    }
+    dollars = point_price * (1 - np.exp(-effects))
+    sentences = []
+    for feat, d in dollars.reindex(dollars.abs().sort_values(ascending=False).index).items():
+        amount = round(float(d), -3)
+        if abs(amount) < 1000:
+            continue
+        verb = "adds about" if amount > 0 else "takes off about"
+        sentences.append(f"{phrases[feat]} {verb} **S${abs(amount):,.0f}**.")
+        if len(sentences) == 5:
+            break
+    return sentences
+
+
+def shap_figure(effects: pd.Series, row: pd.DataFrame) -> plt.Figure:
     effects = effects.reindex(effects.abs().sort_values().index)
     pct = (np.exp(effects) - 1) * 100
 
@@ -294,7 +334,7 @@ def shap_figure(bundle: dict, row: pd.DataFrame) -> tuple[plt.Figure, float]:
     _style_axis(ax)
     ax.tick_params(axis="y", length=0, labelsize=8.5)
     fig.tight_layout()
-    return fig, base_price
+    return fig
 
 
 def trend_figure(trends: pd.DataFrame, town: str, flat_type: str, est: dict) -> plt.Figure | None:
@@ -422,13 +462,15 @@ tab_why, tab_conf, tab_sales, tab_method = st.tabs(
 )
 
 with tab_why:
-    fig, base_price = shap_figure(bundle, row)
+    effects, base_price = contributions(bundle, row)
+    st.markdown("**The biggest things moving this price:**")
+    st.markdown("\n".join(f"- {s}" for s in driver_sentences(effects, row, est["point"])))
     st.caption(
-        f"Starting from a typical resale flat at today's market level ({_sgd(base_price)}), "
-        f"each detail of your flat pushes the estimate up or down to land at "
-        f"{_sgd(est['point'])}."
+        f"Each effect is measured against a typical resale flat at today's market level "
+        f"({_sgd(base_price)}). All effects together land at {_sgd(est['point'])}. "
+        "The full picture, feature by feature:"
     )
-    st.pyplot(fig, width="stretch")
+    st.pyplot(shap_figure(effects, row), width="stretch")
 
 with tab_conf:
     st.markdown(
