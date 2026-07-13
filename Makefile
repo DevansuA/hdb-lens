@@ -13,7 +13,7 @@ test:
 	pytest -q
 
 lint:
-	ruff check src tests
+	ruff check src tests app scripts
 
 app:
 	streamlit run app/streamlit_app.py
