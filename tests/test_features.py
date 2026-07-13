@@ -79,3 +79,12 @@ def test_temporal_split_is_disjoint_and_ordered():
     train, val, test = temporal_split(df, "2024-12", "2025-12")
     assert len(train) == 2 and len(val) == 0 and len(test) == 1
     assert train["month"].max() < test["month"].min()
+
+
+def test_temporal_split_boundary_months_are_inclusive():
+    months = ["2024-12", "2025-01", "2025-12", "2026-01"]
+    df = pd.DataFrame({"month": pd.PeriodIndex(months, freq="M")})
+    train, val, test = temporal_split(df, "2024-12", "2025-12")
+    assert train["month"].astype(str).tolist() == ["2024-12"]
+    assert val["month"].astype(str).tolist() == ["2025-01", "2025-12"]
+    assert test["month"].astype(str).tolist() == ["2026-01"]

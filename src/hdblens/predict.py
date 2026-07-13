@@ -37,7 +37,10 @@ def make_feature_row(
     )
     row = add_geo_features(row)
     for col in CATEGORICAL_FEATURES:
-        row[col] = row[col].astype(reference_categories[col])
+        dtype = reference_categories[col]
+        # Values the model never saw become NaN (LightGBM treats as missing);
+        # pandas 4 raises on casting unknown values into a fixed dtype.
+        row[col] = row[col].where(row[col].isin(dtype.categories)).astype(dtype)
     return row[FEATURES]
 
 

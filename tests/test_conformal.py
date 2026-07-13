@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from hdblens.config import FEATURES, TARGET
-from hdblens.conformal import adaptive_qhat, cqr_correction, predict_interval
+from hdblens.conformal import adaptive_qhat, cqr_correction, interval_report, predict_interval
 from hdblens.predict import predict_price
 
 
@@ -79,6 +79,26 @@ def test_adaptive_qhat_tracks_drift():
     y = test[TARGET].to_numpy()
     frozen_coverage = ((y >= lo) & (y <= hi)).mean() * 100
     assert overall["empirical_coverage_pct"] > frozen_coverage
+
+
+def test_cqr_correction_clamps_finite_sample_level_on_tiny_calibration():
+    # With n=2 and coverage=0.8, ceil((n+1)*coverage)/n = 1.2 must clamp to
+    # the max score rather than crash np.quantile.
+    bundle = _stub_bundle(500_000, 600_000)
+    calib = _feature_frame(2)
+    calib[TARGET] = [700_000.0, 800_000.0]  # both above hi -> positive scores
+    q_hat = cqr_correction(bundle, calib, coverage=0.80)
+    assert np.isclose(q_hat, np.log(800_000) - np.log(600_000))
+
+
+def test_interval_report_known_values():
+    y = np.array([100.0, 200.0, 300.0, 400.0])
+    lo = np.array([90.0, 190.0, 310.0, 390.0])
+    hi = np.array([110.0, 210.0, 330.0, 410.0])  # third interval misses low
+    report = interval_report(y, lo, hi)
+    assert report["empirical_coverage_pct"] == 75.0
+    assert report["mean_width_sgd"] == 20.0
+    assert report["median_width_pct_of_price"] == np.median([20 / 100, 20 / 200, 20 / 300, 20 / 400]) * 100
 
 
 def test_predict_price_applies_cqr_correction():
