@@ -37,6 +37,9 @@ where = ["src"]
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.lint]
+extend-select = ["I", "B", "UP"]  # import order, bugbear, pyupgrade
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

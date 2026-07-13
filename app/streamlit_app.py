@@ -180,10 +180,7 @@ def _load():
     # Recover the category dtypes the model was trained with
     cats = {
         col: pd.CategoricalDtype(categories=cat)
-        for col, cat in zip(
-            CATEGORICAL_FEATURES,
-            [booster.booster_.pandas_categorical[i] for i in range(len(CATEGORICAL_FEATURES))],
-        )
+        for col, cat in zip(CATEGORICAL_FEATURES, booster.booster_.pandas_categorical, strict=True)
     }
     q_hat = float(np.load(MODEL_DIR / "q_hat.npy"))
     return bundle, cats, q_hat

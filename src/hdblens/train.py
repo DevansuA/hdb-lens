@@ -46,7 +46,7 @@ class BaselineModel:
     table: pd.Series = field(default_factory=pd.Series)
     global_median: float = 0.0
 
-    def fit(self, df: pd.DataFrame) -> "BaselineModel":
+    def fit(self, df: pd.DataFrame) -> BaselineModel:
         self.table = df.groupby(["town", "flat_type"], observed=True)[TARGET].median()
         self.global_median = float(df[TARGET].median())
         return self
