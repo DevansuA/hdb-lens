@@ -44,9 +44,9 @@
       "median_width_pct_of_price": 15.491129824301622
     },
     "interval_p10_p90_adaptive": {
-      "empirical_coverage_pct": 78.36572788575961,
-      "mean_width_sgd": 119008.00918082768,
-      "median_width_pct_of_price": 16.667652808907064
+      "empirical_coverage_pct": 77.94525981753273,
+      "mean_width_sgd": 117855.28160090426,
+      "median_width_pct_of_price": 16.491763079796108
     }
   },
   "cqr_q_hat": 0.021819894974772193
