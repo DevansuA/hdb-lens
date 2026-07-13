@@ -205,6 +205,12 @@ def _sgd_k(x: float) -> str:
     return f"S${round(x, -3):,.0f}"
 
 
+def _sgd_md(x: float) -> str:
+    """_sgd with the dollar sign escaped: two bare $ in one markdown string
+    would otherwise pair up as LaTeX math delimiters."""
+    return _sgd(x).replace("$", "\\$")
+
+
 def _floor_band(storey: int) -> str:
     if storey <= 3:
         return "low"
@@ -528,7 +534,7 @@ with tab_why:
     st.markdown("\n".join(f"- {s}" for s in driver_sentences(effects, row, est["point"])))
     st.caption(
         f"Each effect is measured against a typical resale flat at today's market level "
-        f"({_sgd(base_price)}). All effects together land at {_sgd(est['point'])}. "
+        f"({_sgd_md(base_price)}). All effects together land at {_sgd_md(est['point'])}. "
         "The full picture, feature by feature:"
     )
     st.pyplot(
@@ -598,9 +604,10 @@ with tab_method:
     c1.metric("2026 test MAPE", f"{test_metrics['lightgbm_point']['mape_pct']:.1f}%")
     c2.metric("2026 test MAE", _sgd(test_metrics["lightgbm_point"]["mae"]))
     st.markdown("**Interval coverage** (80% nominal)")
-    rows = [("Raw P10–P90 quantiles", cov_raw), ("+ CQR, frozen q̂ (served here)", cov_cal)]
+    # Leading "+" is escaped so markdown does not read it as a nested list marker.
+    rows = [("Raw P10–P90 quantiles", cov_raw), ("\\+ CQR, frozen q̂ (served here)", cov_cal)]
     if cov_adaptive:
-        rows.append(("+ monthly adaptive recalibration", cov_adaptive))
+        rows.append(("\\+ monthly adaptive recalibration", cov_adaptive))
     st.markdown("\n".join(f"- {label}: **{v:.0f}%**" for label, v in rows))
     st.caption(
         "Every number above is out-of-time: the model prices 2026 flats knowing "
