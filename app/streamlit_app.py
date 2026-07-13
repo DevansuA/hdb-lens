@@ -355,7 +355,7 @@ def driver_sentences(effects: pd.Series, row: pd.DataFrame, point_price: float) 
     return sentences
 
 
-def shap_figure(effects: pd.Series, row: pd.DataFrame) -> plt.Figure:
+def shap_figure(effects: pd.Series, row: pd.DataFrame, market_label: str) -> plt.Figure:
     effects = effects.reindex(effects.abs().sort_values().index)
     pct = (np.exp(effects) - 1) * 100
 
@@ -370,14 +370,14 @@ def shap_figure(effects: pd.Series, row: pd.DataFrame) -> plt.Figure:
         "flat_age_years": f"{r['flat_age_years']:.0f} yrs",
         "dist_cbd_km": f"{r['dist_cbd_km']:.1f} km",
         "dist_regional_centre_km": f"{r['dist_regional_centre_km']:.1f} km",
-        "month_index": "mid-2026",
+        "month_index": market_label,
     }
     labels = [f"{FEATURE_LABELS[f]} · {values[f]}" for f in pct.index]
 
     fig, ax = plt.subplots(figsize=(6.4, 3.6))
     lim = max(abs(pct.min()), abs(pct.max())) * 1.35 + 2
     pad = lim * 0.05
-    for i, (label, v) in enumerate(zip(labels, pct)):
+    for i, v in enumerate(pct):
         color = ACCENT if v >= 0 else RED
         ax.plot([0, v], [i, i], color=color, lw=8, solid_capstyle="round")
         text = f"{v:+.1f}%" if abs(v) >= 0.05 else "0.0%"
@@ -427,7 +427,7 @@ cov_raw = test_metrics["interval_p10_p90"]["empirical_coverage_pct"]
 cov_cal = test_metrics["interval_p10_p90_conformal"]["empirical_coverage_pct"]
 cov_adaptive = test_metrics.get("interval_p10_p90_adaptive", {}).get("empirical_coverage_pct")
 n_sales = meta["n_train"] + metrics["val_2025"]["n"] + test_metrics["n"]
-n_sales_str = f"{round(n_sales, -4):,}+"
+n_sales_str = f"{n_sales // 10_000 * 10_000:,}+"  # floor, so the "+" stays true
 
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
@@ -534,7 +534,9 @@ with tab_why:
         f"({_sgd(base_price)}). All effects together land at {_sgd(est['point'])}. "
         "The full picture, feature by feature:"
     )
-    st.pyplot(shap_figure(effects, row), width="stretch")
+    st.pyplot(
+        shap_figure(effects, row, latest_month.strftime("%b %Y")), width="stretch"
+    )
 
 with tab_conf:
     st.markdown(
