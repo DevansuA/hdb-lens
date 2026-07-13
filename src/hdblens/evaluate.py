@@ -11,6 +11,7 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, r2_score
 
 from hdblens.config import FEATURES, TARGET
+from hdblens.conformal import interval_report
 
 
 def point_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
@@ -31,17 +32,12 @@ def evaluate_split(bundle: dict, df: pd.DataFrame) -> dict:
 
     lo = np.exp(bundle["quantiles"][0.10].predict(df[FEATURES]))
     hi = np.exp(bundle["quantiles"][0.90].predict(df[FEATURES]))
-    covered = (y >= lo) & (y <= hi)
 
     return {
         "n": int(len(df)),
         "baseline": point_metrics(y, base_pred),
         "lightgbm_point": point_metrics(y, point_pred),
-        "interval_p10_p90": {
-            "empirical_coverage_pct": float(covered.mean() * 100),
-            "mean_width_sgd": float(np.mean(hi - lo)),
-            "median_width_pct_of_price": float(np.median((hi - lo) / y) * 100),
-        },
+        "interval_p10_p90": interval_report(y, lo, hi),
     }
 
 

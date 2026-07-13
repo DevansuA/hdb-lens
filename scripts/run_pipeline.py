@@ -141,6 +141,7 @@ def main(refresh: bool) -> None:
     }
 
     # Conformal calibration on the most recent 6 months of validation data
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
     recent = val[val["month"] >= (val["month"].max() - 5)]
     q_hat = cqr_correction(bundle, recent, coverage=0.80)
     np.save(MODEL_DIR / "q_hat.npy", q_hat)
@@ -152,7 +153,6 @@ def main(refresh: bool) -> None:
 
     monthly, adaptive_overall = adaptive_qhat(bundle, val, test, coverage=0.80)
     metrics["test_2026"]["interval_p10_p90_adaptive"] = adaptive_overall
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
     monthly.to_csv(MODEL_DIR / "adaptive_coverage.csv", index=False)
     make_adaptive_figure(bundle, test, q_hat, monthly)
 

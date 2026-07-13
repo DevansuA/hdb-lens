@@ -60,7 +60,7 @@ def adaptive_qhat(
     history = calib
     rows, ys, los, his = [], [], [], []
     for month, grp in test.groupby("month", sort=True):
-        recent = history[history["month"] > month - window]
+        recent = history[history["month"] >= month - window]
         q_hat = cqr_correction(bundle, recent, coverage)
         lo, hi = predict_interval(bundle, grp, q_hat)
         y = grp[TARGET].to_numpy()

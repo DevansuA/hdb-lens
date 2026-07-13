@@ -15,7 +15,7 @@ Indicative pricing for Singapore HDB resale flats: buyer/seller anchoring, affor
 | Validation (2025) | 25,085 | S$33,929 | 4.92% | 0.941 |
 | Test (2026 H1) | 12,605 | S$39,942 | 5.69% | 0.925 |
 
-P10–P90 interval on 2026 test: 75.7% empirical coverage after CQR frozen at deployment (nominal 80%), median width 15.5% of price. Recalibrating monthly against trailing observed sales (adaptive CQR) recovers 78.4% coverage at a median width of 16.7%.
+P10–P90 interval on 2026 test: 75.7% empirical coverage after CQR frozen at deployment (nominal 80%), median width 15.5% of price. Recalibrating monthly against the trailing six months of observed sales (adaptive CQR) recovers 77.9% coverage at a median width of 16.5%.
 
 ## Known limitations
 - Coverage degrades under sustained price drift; the model cannot extrapolate the time trend.
